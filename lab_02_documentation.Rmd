@@ -2,7 +2,9 @@
 title: "Data Wrangling with R"
 author: "Jonathan Gilligan"
 date: "August 30, 2017"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -179,8 +181,8 @@ Nashville and Chicago,
 by running the code below:
 
 ```{r load_datasets, include=TRUE}
-nashville_weather = loadRDS('data/nashville_weather.Rds')
-chicago_weather = loadRDS('data/chicago_weather.Rds')
+nashville_weather = readRDS('data/nashville_weather.Rds')
+chicago_weather = readRDS('data/chicago_weather.Rds')
 ```
 
 Here is an example of the first few rows of a tibble with weather data for 
@@ -328,7 +330,7 @@ head(x)
 We can specify a range of consecutive columns by giving the first and last with a 
 colon between them:
 
-```{r nw_keep, include=TRUE}
+```{r nw_keep_2, include=TRUE}
 x = select(nashville_weather, date:tmax)
 head(x)
 ```
@@ -457,5 +459,5 @@ x = weather %>%
   summarize(prcp.max = max(prcp), prcp.tot = sum(prcp), t.range.max = max(t.range)) %>%
   ungroup() %>%
   arrange(year, location)
-head(x)
+tail(x)
 ```
