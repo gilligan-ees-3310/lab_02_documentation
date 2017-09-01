@@ -3,6 +3,33 @@ Data Wrangling with R
 Jonathan Gilligan
 August 30, 2017
 
+Introduction
+============
+
+This is a brief introduction to data types, data structures, and some of the functions and packages that we will use to manipulate data in the labs.
+
+There is a lot more, and two particular resources that I would recommend to you are available free on the web.
+
+R for Data Science
+------------------
+
+The first is the book, *R for Data Science*, by Hadley Wickham who wrote most of the packages in the `tidyverse` collection. You can buy a print version of the book from all the usual online sources, but Wickham has also posted the full text on the web at <http://r4ds.had.co.nz/> to make it available for free. (Also, he wrote the whole book in RMarkdown, and if you're curious you can get the RMarkdown from <https://github.com/hadley/r4ds>).
+
+The key parts of the book, from the perspective of the labs for this course, are Chapter 4: "Workflow Basics," which presents a brief overview of R and how to program with it; Chapter 5: "Data Transformation," which explains the functions I discuss in the first part of this handout about tibbles and the manipulating them with functions like `select`, `filter`, `mutate`, and `summarize`; and Chapter 3: "Data Visualization," which describes using the `ggplot2` package to make graphs and charts of your data.
+
+If you are interested in learning more about R, Section II of the book discusses the different data types that R uses in detail (tibbles, character data (or strings), factors, dates, and times). Section III discusses programming, and section IV discusses statistical modeling (i.e., fitting functions to data). Section V discusses RMarkdown and all the different ways you can use it to communicate about your analysis with other people.
+
+The book is an excellent introduction to data analysis with R. I have recommended it to many people who did not previously have experience working with programming or R and they found it a very accessible, useful, and user-friendly introduction.
+
+Online documentation for the tidyverse
+--------------------------------------
+
+*R for Data Science* is a great introduction to the concepts behind the `tidyverse` collection of packages and functions for R, but what should you do when you already understand that big picture and just want to know how to do a specific task? For that, the online documentation for the `tidyverse` is very useful and you can find it at <http://www.tidyverse.org/packages/>.
+
+This page has links to the documentation for all the major tidyverse packages: `ggplot2` for making graphics, `dplyr` and `tidyr` for working with `data.frames` and tibbles, `reader` for reading in data from text files on the disk and `readxl` for reading data from Excel spreadsheets, and many more packages that we will not be using in these labs.
+
+The documents give lots of examples showing what the functions do and explanations of how to do many common tasks. Especially for `ggplot2`, it can be very useful to look at the graphs in the examples to find something that looks like what you're trying to do and then seeing the code that made that happen.
+
 Data in R
 =========
 
@@ -434,13 +461,13 @@ This creates a single tibble that has all of the rows from `nashville_weather` o
 We can operate on this combined tibble:
 
 ``` r
-x = weather %>% 
+weather_summary = weather %>% 
   mutate(year = year(date), t.range = tmax - tmin) %>%
   group_by(year, location) %>%   
   summarize(prcp.max = max(prcp), prcp.tot = sum(prcp), t.range.max = max(t.range)) %>%
   ungroup() %>%
   arrange(year, location)
-tail(x)
+tail(weather_summary)
 ```
 
     ## # A tibble: 6 x 5
@@ -452,3 +479,280 @@ tail(x)
     ## 4  2016 Nashville, TN     52.8   1086.1        22.2
     ## 5  2017   Chicago, IL       NA       NA          NA
     ## 6  2017 Nashville, TN       NA       NA          NA
+
+Re-shaping tibbles: `gather` and `spread`
+-----------------------------------------
+
+Sometimes you want to gather many columns in a data table, data frame, or tibble into a single column. For instance, consider this data frame, which was read in from a spreadsheet of global temperatures produced at NASA:
+
+``` r
+giss_zonal <- readRDS('data/giss_zonal.Rds')
+head(giss_zonal)
+```
+
+    ## # A tibble: 6 x 9
+    ##    year x64n_90n x44n_64n x24n_44n equ_24n x24s_equ x44s_24s x64s_44s
+    ##   <int>    <dbl>    <dbl>    <dbl>   <dbl>    <dbl>    <dbl>    <dbl>
+    ## 1  1880    -1.05    -0.51    -0.26   -0.21    -0.14    -0.05     0.05
+    ## 2  1881    -0.93    -0.50    -0.15    0.03     0.06    -0.07    -0.07
+    ## 3  1882    -1.51    -0.29    -0.09   -0.09    -0.07     0.02     0.04
+    ## 4  1883    -0.40    -0.62    -0.22   -0.24    -0.19    -0.02     0.07
+    ## 5  1884    -1.36    -0.62    -0.41   -0.23    -0.20    -0.19    -0.02
+    ## 6  1885    -1.19    -0.68    -0.42   -0.09    -0.23    -0.31    -0.15
+    ## # ... with 1 more variables: x90s_64s <dbl>
+
+The tibble presents the average temperatures for different bands of latitude: 64%deg;N--90°N, 44°N==64°N, 24°N--44°N, Equator--24°N, and the same for the Southern Hemisphere.
+
+If we wanted to plot all of these, we could do something like this:
+
+``` r
+ggplot(giss_zonal, aes(x = year)) + 
+  geom_line(aes(y = x64n_90n, color = "64N-90N")) +
+  geom_line(aes(y = x44n_64n, color = "44N-64N")) +
+  geom_line(aes(y = x24n_44n, color = "24N-44N")) +
+  geom_line(aes(y = equ_24n, color = "EQU-24N")) +
+  geom_line(aes(y = x24s_equ, color = "24S-EQU")) +
+  geom_line(aes(y = x44s_24s, color = "44S-24S")) +
+  geom_line(aes(y = x64s_44s, color = "64S-44S")) +
+  geom_line(aes(y = x90s_64s, color = "90S-64S")) +
+  labs(x = "Year", y = "Temperature anomaly")
+```
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/bad_zonal_plot-1.png) This is a big mess. It would be hard to clean up the appearance, and would require a lot of retyping if we decided to group the data into different bands of latitude.
+
+We can do this much more easily with the `gather` function:
+
+``` r
+bands = names(giss_zonal) # column names of the tibble
+bands = bands[-1] # drop the first column ("year")
+labels = c("64N-90N", "44N-64N", "24N-44N", "EQU-24N", 
+           "24S-EQU", "44S-24S", "64S-44S", "90S-64S")
+tidy_zonal = giss_zonal %>%
+  gather(key = latitude, value = anomaly, -year)
+
+head(tidy_zonal)
+```
+
+    ## # A tibble: 6 x 3
+    ##    year latitude anomaly
+    ##   <int>    <chr>   <dbl>
+    ## 1  1880 x64n_90n   -1.05
+    ## 2  1881 x64n_90n   -0.93
+    ## 3  1882 x64n_90n   -1.51
+    ## 4  1883 x64n_90n   -0.40
+    ## 5  1884 x64n_90n   -1.36
+    ## 6  1885 x64n_90n   -1.19
+
+Now we can clean up the `latitude` column a bit to make it more friendly for human readers:
+
+``` r
+tidy_zonal = tidy_zonal %>%
+  mutate(latitude = ordered(latitude, levels = bands, 
+                            labels = labels)) %>%
+  # ^^^ the previous line converts the latitude band into an ordered factor
+  # where the order is the order of the original columns. This will prevent
+  # R from sorting them alphabetically when it makes the legend for the plot.
+  # The "labels" parameter then changes the names from the somewhat cryptic 
+  # original column name to something a human can read easily.
+  arrange(year, latitude)
+
+head(tidy_zonal)
+```
+
+    ## # A tibble: 6 x 3
+    ##    year latitude anomaly
+    ##   <int>    <ord>   <dbl>
+    ## 1  1880  64N-90N   -1.05
+    ## 2  1880  44N-64N   -0.51
+    ## 3  1880  24N-44N   -0.26
+    ## 4  1880  EQU-24N   -0.21
+    ## 5  1880  24S-EQU   -0.14
+    ## 6  1880  44S-24S   -0.05
+
+Now let's plot it:
+
+``` r
+ggplot(tidy_zonal, aes(x = year, y = anomaly, color = latitude)) +
+  geom_line() +
+  labs(x = "Year", y = "Temperature anomaly")
+```
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/plot_zonal_tibble-1.png) The code for making the plot was a lot simpler, and by using an ordered factor, we could control the order of the latitude bands in the legend, which now appear in a sensible order. It is much easier to look at this graph and quickly recognize that the far northern latitudes (64N-90N, and to a lesser extent 44N-64N) are warming up much faster than the rest of the planet.
+
+Back in 1967, one of the first global climate models predicted that global warming due to greenhouse gases would cause the far northern latitudes to warm up much faster than the rest of the planet. This data confirms that prediction.
+
+We also see that the Southern Hemisphere has warmed much less than the Northern. Think about why that might be.
+
+We can also do the inverse of `gather` and spread one column of data and one "key" column into many columns, whose names are taken from the "key" column.
+
+Let's go back to the `weather_summary` tibble we made above:
+
+``` r
+head(weather_summary)
+```
+
+    ## # A tibble: 6 x 5
+    ##    year    location prcp.max prcp.tot t.range.max
+    ##   <dbl>       <chr>    <dbl>    <dbl>       <dbl>
+    ## 1  1928 Chicago, IL       NA       NA          NA
+    ## 2  1929 Chicago, IL       NA       NA          NA
+    ## 3  1930 Chicago, IL       NA       NA          NA
+    ## 4  1931 Chicago, IL       NA       NA          NA
+    ## 5  1932 Chicago, IL       NA       NA          NA
+    ## 6  1933 Chicago, IL       NA       NA          NA
+
+Let's set it up to make it easy to compare the annual precipitation of Nashville and Chicago:
+
+``` r
+x = weather_summary %>% select(year, location, prcp.tot) %>%
+  spread(key = location, value = prcp.tot)
+tail(x)
+```
+
+    ## # A tibble: 6 x 3
+    ##    year `Chicago, IL` `Nashville, TN`
+    ##   <dbl>         <dbl>           <dbl>
+    ## 1  2012         801.4          1164.8
+    ## 2  2013        1075.6          1394.5
+    ## 3  2014        1321.5          1285.7
+    ## 4  2015        1168.8          1290.7
+    ## 5  2016        1066.7          1086.1
+    ## 6  2017            NA              NA
+
+Graphing Data
+=============
+
+Here, we will look at the `ggplot2` package for plotting data. This package is automatically loaded when you load the `tidyverse` collection with `library(tidyverse)`. It follows a theory of making useful graphs of data called, "The Grammar of Graphics" (that's where the "gg" comes from).
+
+The idea is that a graph has several distinct parts, which come together:
+
+-   One or more *layers* of graphics. A layer consists of the following:
+-   A *data table* with one or more columns, each corresponding to a different variable,
+-   A *mapping* of different variables (columns) in the data table to different, *aesthetics* of the plot. Aesthetics are things like
+    -   the *x* coordinate,
+    -   the *y* coordinate,
+    -   the *color* of the point or line,
+    -   the *fill* color that is used to fill in areas, like the interior of a rectangle or circle.
+    -   the *shape* of points (e.g., circle, square, triangle, cross, diamond, ...)
+    -   the *size* of points and lines
+    -   the *linetype* (e.g., solid, dashed, dotted, ...)
+    -   and so forth ...
+-   A *geometry* (point, line, box, etc.) that is used to draw the data
+-   A coordinate system (axes and legends)
+
+There are some more aspects to the gramar of graphics, but we don't need them for what we're going to do.
+
+A simple graph has just one layer:
+
+``` r
+ggplot(data = tidy_zonal, # the data
+       mapping = aes(x = year, y = anomaly, color = latitude, shape = latitude) # the mapping of variables to aesthetics
+       ) +
+  geom_point() + # the geometry
+  labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values
+    ## because more than 6 becomes difficult to discriminate; you have 8.
+    ## Consider specifying shapes manually if you must have them.
+
+    ## Warning: Removed 274 rows containing missing values (geom_point).
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/simple_plot-1.png)
+
+We can also make a plot with the same data, but two layers:
+
+``` r
+ggplot(data = tidy_zonal, # the data
+       mapping = aes(x = year, y = anomaly, color = latitude, shape = latitude) # the mapping of variables to aesthetics
+       ) +
+  geom_point() + # the geometry of the first layer
+  geom_line() +  # the geometry of the second layer
+  labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values
+    ## because more than 6 becomes difficult to discriminate; you have 8.
+    ## Consider specifying shapes manually if you must have them.
+
+    ## Warning: Removed 274 rows containing missing values (geom_point).
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/second_plot-1.png)
+
+We can also use different mappings for different layers
+
+``` r
+annual_extremes = weather %>% mutate(year = year(date)) %>%
+  group_by(location, year) %>% 
+  summarize(tmin = min(tmin, na.rm = T),      # the na.rm = T means to ignore missing values
+            tmax = max(tmax, na.rm = T)) %>%  # if we don't put that in, then if any year has
+  ungroup()                                   # a missing value for even one day, the tmax 
+                                              # or tmin for that year will be recorded as 
+                                              # NA (missing)
+ggplot(data = annual_extremes # the data
+       ) +
+  geom_point(aes(x = year, y = tmin, color = location, shape = "min")) +
+  geom_point(aes(x = year, y = tmax, color = location, shape = "max")) +
+  xlim(1990,2000) + # set the range of the x-axis, part of the coordinate specification
+  labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
+```
+
+    ## Warning: Removed 138 rows containing missing values (geom_point).
+
+    ## Warning: Removed 138 rows containing missing values (geom_point).
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/third_plot-1.png)
+
+Note that `ggplot` issued several harmless warnings to tell us that setting the limits of the *x*-axis the way we did. We can tell RMarkdown not to include those warnings in the document by adding "warning=FALSE" to the options for the chunk
+
+If we want to specify aesthetics as having fixed values, we can specify them outside of the mapping. Here I specify the size and color of lines:
+
+``` r
+ggplot(data = annual_extremes # the data
+       ) +
+  geom_line(aes(x = year, y = tmin, group = location), color = "dark blue", size = 1) +
+  geom_line(aes(x = year, y = tmax, group = location), color = "dark red", size = 0.3) +
+  geom_point(aes(x = year, y = tmin, color = location, shape = "min"), size = 2) +
+  geom_point(aes(x = year, y = tmax, color = location, shape = "max"), size = 2) +
+  xlim(1990,2000) + # set the range of the x-axis, part of the coordinate specification
+  labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
+```
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/fourth_plot-1.png)
+
+We can also take finer control of the axis formatting:
+
+``` r
+ggplot(data = annual_extremes # the data
+       ) +
+  geom_line(aes(x = year, y = tmin, group = location), color = "dark blue", size = 1) +
+  geom_line(aes(x = year, y = tmax, group = location), color = "dark red", size = 0.3) +
+  geom_point(aes(x = year, y = tmin, color = location, shape = "min"), size = 2) +
+  geom_point(aes(x = year, y = tmax, color = location, shape = "max"), size = 2) +
+  scale_x_continuous(limits=c(1990,2000), breaks = c(1990, 1992, 1994, 1996, 1998, 2000)) + 
+  # ^^^ the "breaks" parameter for an axis tells R where to put the labels
+  labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
+```
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/fifth_plot-1.png)
+
+And, of course, we could use `gather` to simplify this graph:
+
+``` r
+annual_extremes_gathered = annual_extremes %>%
+  gather(key = Temperature, value = value, -year, -location)
+
+ggplot(data = annual_extremes_gathered # the data
+       ) +
+  geom_line( aes(x = year, y = value, color = location, size = Temperature)) +
+  geom_point(aes(x = year, y = value, color = location, shape = Temperature), size = 2) +
+  scale_size_manual(values = c(tmax = 0.5, tmin = 0.1)) + # set coordinates for "size"
+  scale_x_continuous(limits=c(1990,2000), breaks = c(1990, 1992, 1994, 1996, 1998, 2000)) + 
+  # ^^^ Set coordinates for the x-axis.
+  scale_color_brewer(palette = "Set1", name = "City") + # one of many options for setting the color palette
+                                                        # the Brewer palettes are very good for people with
+                                                        # color-blindness.
+  labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
+```
+
+![](lab_02_documentation_files/figure-markdown_github-ascii_identifiers/sixth_plot-1.png)
