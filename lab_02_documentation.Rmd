@@ -3,8 +3,8 @@ title: "Data Wrangling with R"
 author: "Jonathan Gilligan"
 date: "August 30, 2017"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
   github_document: default
 ---
 
