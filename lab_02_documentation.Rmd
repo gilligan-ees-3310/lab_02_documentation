@@ -1,18 +1,22 @@
 ---
 title: "Data Wrangling with R"
 author: "Jonathan Gilligan"
-date: "Reading for Lab on Monday Sept.\ 3."
-fontfamily: "newtxtext,newtxmath"
-fontsize: "12pt"
+date: "Reading for Lab on Monday Feb.\ 1"
+fontsize: 12pt
 output:
-  pdf_document: default
-  html_document: default
-  github_document: default
+  github_document:
+    toc: yes
+  html_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+    includes:
+      in_header: "ees3310.sty"
 ---
-
 ```{r setup, include=FALSE}
 knitr::knit_hooks$set(inline = function(x) { knitr:::format_sci(x, 'md')})
 knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform = FALSE)
 
 # This section loads necessary R libraries and sources scripts that define 
 # useful functions format_md.
@@ -21,7 +25,7 @@ data_dir = "_data"
 script_dir = "_scripts"
 
 library(pacman)
-p_load(zoo, xml2, tidyverse, stringr, lubridate)
+p_load(tidyverse, lubridate)
 
 theme_set(theme_bw(base_size = 15))
 
@@ -29,8 +33,8 @@ theme_set(theme_bw(base_size = 15))
 
 if (!dir.exists(data_dir)) dir.create(data_dir)
 
-nashville_weather = readRDS('_data/nashville_weather.Rds')
-chicago_weather = readRDS('_data/chicago_weather.Rds')
+nashville_weather <- readRDS('_data/nashville_weather.Rds')
+chicago_weather <- readRDS('_data/chicago_weather.Rds')
 ```
 # Introduction
 
@@ -44,20 +48,31 @@ are available free on the web.
 
 ## R for Data Science 
 
-The first is the book, _R for Data Science_, by Hadley Wickham who wrote most
-of the packages in the `tidyverse` collection. You can buy a print version of
-the book from all the usual online sources, but Wickham has also posted the 
-full text on the web at <http://r4ds.had.co.nz/> to make it available for free.
+The first resource is the book, [_R for Data Science_](https://r4ds.had.co.nz), 
+by Hadley Wickham who wrote most of the `tidyverse` collection. 
+You can buy a print 
+version of the book from all the usual online sources, but Wickham has also 
+posted the full text on the web at <http://r4ds.had.co.nz/> to make it 
+available for free.
 (Also, he wrote the whole book in RMarkdown, and if you're curious you can get
-the RMarkdown from <https://github.com/hadley/r4ds>).
+the RMarkdown for the book from <https://github.com/hadley/r4ds>).
 
 The key parts of the book, from the perspective of the labs for this course,
-are Chapter 4: "Workflow Basics," which presents a brief overview of R and
-how to program with it; Chapter 5: "Data Transformation," which explains the
+are 
+[Chapter 4: "Workflow Basics,"](https://r4ds.had.co.nz/workflow-basics.html)
+which presents a brief overview of R and
+how to program with it; 
+[Chapter 5: "Data Transformation,"](https://r4ds.had.co.nz/transform.html)
+which explains the
 functions I discuss in the first part of this handout about tibbles and the 
 manipulating them with functions like `select`, `filter`, `mutate`, and
-`summarize`; and Chapter 3: "Data Visualization," which describes using 
+`summarize`; and 
+[Chapter 3: "Data Visualization,"](https://r4ds.had.co.nz/data-visualisation.html) 
+which describes using 
 the `ggplot2` package to make graphs and charts of your data.
+[Chapter 12, "Tidy Data"](https://r4ds.had.co.nz/tidy-data.html)
+describes using the `pivot` functions to organize
+your data in ways that make it easier to analyze.
 
 If you are interested in learning more about R, Section II of the book
 discusses the different data types that R uses in detail (tibbles,
@@ -80,13 +95,17 @@ a specific task? For that, the online documentation for the `tidyverse` is
 very useful and you can find it at <http://www.tidyverse.org/packages/>.
 
 This page has links to the documentation for all the major tidyverse packages:
-`ggplot2` for making graphics, `dplyr` and `tidyr` for working with `data.frames`
-and tibbles, `reader` for reading in data from text files on the disk and
-`readxl` for reading data from Excel spreadsheets, and many more packages that
-we will not be using in these labs.
+[`ggplot2`](https://ggplot2.tidyverse.org/) for making graphics, 
+[`dplyr`](https://dplyr.tidyverse.org/)  and 
+[`tidyr`](https://tidyr.tidyverse.org/) for working with `data.frames` and 
+[`tibbles`](https://tibble.tidyverse.org/), 
+[`reader`](https://readr.tidyverse.org/) for reading in data from text files and
+[`readxl`](https://readxl.tidyverse.org/) for reading data from Excel 
+spreadsheets, and many more packages that we will not be using in these labs.
 
 The documents give lots of examples showing what the functions do and explanations
-of how to do many common tasks. Especially for `ggplot2`, it can be very useful
+of how to do many common tasks. Especially for 
+[`ggplot2`](https://ggplot2.tidyverse.org/), it can be very useful
 to look at the graphs in the examples to find something that looks like what 
 you're trying to do and then seeing the code that made that happen.
 
@@ -218,7 +237,7 @@ R provides a structure called a `data.frame` for working with tabular data, but
 the package `tidyverse` introduces an improved version of the `data.frame`
 called a `tibble` (think of it as a kind of data table).
 
-`data.frames` and tibbles have rows and columns. A row represents a set of 
+`data.frames` and `tibbles` have rows and columns. A row represents a set of 
 quantities, such as measurements or observations, that go together in some way.
 Different rows in a tibble represent different sets of these quantities.
 
@@ -231,7 +250,7 @@ If I am measuring the average temperature and average precipitation
 for a number of cities, then I would have a column for the city, a column for the
 temperature, and a column for the precipitation.
 
-Each column of a `data.frame` or tibble should correspond to a specific kind of 
+Each column of a `data.frame` or `tibble` should correspond to a specific kind of 
 data (integer, floating point, character, factor, date, etc.). A column is 
 a kind of vector, so it has to obey the restrictions that apply to vectors.
 
@@ -271,7 +290,10 @@ columns using the dollar sign, just as with regular named lists:
 
 ```{r tibble_column, include=TRUE}
 precipitation = nashville_weather$prcp
+```
 
+And we can see what the result is:
+```{r inspect_tibble_column, include=TRUE}
 head(precipitation)
 ```
 
@@ -297,7 +319,7 @@ print("Length of x is")
 print(length(x))
 
 print("Dimensions of dplyr::storms is ")
-dim(dplyr::storms)
+print(dim(dplyr::storms))
 ```
 That's `r nrow(dplyr::storms)` rows and `r ncol(dplyr::storms)` columns.
 You can also get just the number of rows or the number of columns
@@ -310,6 +332,10 @@ to make it easy to work with data frames. Wickham developed an improved
 kind of data frame that has features that are lacking in the basic R
 `data.frame`, and he developed a collection of tools for manipulating, 
 analyzing, and graphing data from tibbles and regular `data.frames`.
+
+The tidyverse is explained in detail in the book, 
+[_R for Data Science_](https://r4ds.had.co.nz/), which you can read online at
+<https://r4ds.had.co.nz/transform.html>.
 
 To use the tidyverse, we need to load the package using R's `library` function.
 If tidyverse is not installed on your computer, you will get an error message
@@ -341,6 +367,8 @@ library(lubridate)
 # p_load(tidyverse, lubridate)
 ```
 
+## Manipulating `tibbles`
+
 One part of the `tidyverse` is the package `dplyr`, which has many useful 
 tools for modifying and manipulating tibbles:
 
@@ -359,6 +387,11 @@ tools for modifying and manipulating tibbles:
 
 There is a lot more, but these functions will be enough to keep us busy for now
 and they will allow us to do some powerful analysis.
+
+If you want to learn more about these functions, they are explained in detail in
+[Chapter 5](https://r4ds.had.co.nz/transform.html) of _R for Data Science_.
+
+### Manipulating Columns
 
 Let's start with `select`: You can select columns to keep or columns to delete.
 
@@ -410,6 +443,8 @@ x = rename(nashville_weather, weather_station = id, city = location)
 head(x)
 ```
 
+### Selecting Rows
+
 `filter` lets us select only rows that match a condition:
 ```{r filter_nw, include=TRUE}
 x = filter(nashville_weather, year(date) > 2015 & tmax < 0)
@@ -445,11 +480,22 @@ and where multiple rows have the same value of `tmax`, then it sorts them in asc
 of `tmin`. Observe the three rows with `tmax` = 41.7, the two rows where `tmax` = 41.1,
 and the four rows where `tmax` = 40.6.
 
-We can use `mutate` to modify the values of columns or to create new columns.
-The temperatures in Nashville weather are in Celsius and the precipitation is
-in millimeters. Let's convert these to Fahrenheit and inches, respectively, and
-then let's create a `trange` column that will have the difference between the maximum
-and minimum temperature:
+By default, `head` takes the first 6 rows of a tibble, but we can override that,
+to return a different number of rows. 
+Here, we told `head` to return the first 10 rows of `x`.
+
+If we want to change the values in a column, or create new columns,
+we can use the `mutate` function.
+The weather data we have give temperatures in Celsius and the precipitation 
+in millimeters. 
+Let's convert these to Fahrenheit and inches, respectively, and then let's 
+create a `trange` column that will have the difference between the maximum
+and minimum temperature.
+
+There are 25.4 millimeters in an inch and we convert Celsius temperatures to 
+Fahrenheit using the equation
+
+$$ T_{\text{Fahrenheit}} = (9/5) T_{\text{Celsius}} + 32 $$
 
 ```{r mutate, include=TRUE}
 x = mutate(nashville_weather, prcp = prcp / 25.4, tmin = tmin * 9./5. + 32,
@@ -457,21 +503,38 @@ x = mutate(nashville_weather, prcp = prcp / 25.4, tmin = tmin * 9./5. + 32,
 head(x)
 ```
 
-Summaries are useful for finding averages and extreme values. Let's find the maximum and minimum temperatures 
-and the most extreme rainfall in the whole data set:
+### Summarizing rows
+
+Summaries are useful for finding averages and extreme values. 
+Let's find the maximum and minimum temperatures and the most extreme rainfall 
+in the whole data set:
 
 ```{r summarize_simple, include=TRUE}
-x = summarize(nashville_weather, prcp.max = max(prcp), tmin.min = min(tmin), 
-              tmax.max = max(tmax))
+x = summarize(nashville_weather, prcp_max = max(prcp, na.rm = TRUE), 
+              tmin_min = min(tmin, na.rm = TRUE), 
+              tmax_max = max(tmax, na.rm = TRUE))
 x
 ```
+`nashville_weather` has `r nrow(nashville_weather)` rows, 
+but summarize reduces it to a single summary row.
 
-`nashville_weather` has `r nrow(nashville_weather)` rows, but summarize reduces it to a single summary row.
+**NOTE:** Here, the parameter `na.rm = TRUE` in `max` and `min` is a way to 
+tell R to ignore missing values when it calculates the maximum and minimum 
+values. Sometimes a data set will have missing values (for instance, suppose 
+the weather station was not working that day), and it indicates these with a 
+special value that appears as `NA`, meaning "not available". Normally, if you 
+ask for the maximum, minimum, or mean value of a data series with missing 
+values, R will return `NA` because if some values are missing, it doesn't know 
+what the actual maximum or minimum is---the missing values could have been the 
+largest or smallest. If you want R to ignore missing values and return the 
+maximum, minimum, or mean value of the data that you do have, then you add the 
+`na.rm = TRUE` parameter when you call `max()`, `min()`, `mean()`, or 
+other summary functions.
 
 You can use summary to generate multiple summary quantities from a column:
 
 ```{r summarize_simple_2, include=TRUE}
-x = summarize(nashville_weather, prcp.max = max(prcp), prcp.min = min(prcp))
+x = summarize(nashville_weather, prcp_max = max(prcp), prcp_min = min(prcp))
 x
 ```
 
@@ -479,7 +542,7 @@ We can also generate grouped summaries:
 
 ```{r summarize_grouped_1, include=TRUE}
 x = ungroup(summarize(group_by(nashville_weather, year(date)), 
-                      prcp.max = max(prcp), prcp.tot = sum(prcp)))
+                      prcp_max = max(prcp), prcp_tot = sum(prcp)))
 head(x)
 ```
 This provides the maximum one-day precipitation and the total annual precipitation for each year
@@ -494,8 +557,7 @@ taking the result of the one on the left and inserting it into the one on the ri
 We can use the pipe operator to rewrite the expression above as
 
 ```{r summarize_grouped_pipes, include=TRUE}
-x = nashville_weather %>% group_by(year(date)) %>% 
-  summarize(prcp.max = max(prcp), prcp.tot = sum(prcp)) %>%
+x = nashville_weather %>% group_by(year(date)) %>% summarize(prcp_max = max(prcp), prcp_tot = sum(prcp)) %>%
   ungroup()
 head(x)
 ```
@@ -506,7 +568,9 @@ You can combine any set of the `tidyverse` functions using the pipe operator, so
 `filter` rows, `mutate` the values of columns, and `summarize`, using the `%>%` pipe operator to connect
 all of the different operations in sequence.
 
-The final `dplyr` command we're going to look at is `bind_rows`, which lets us combine tibbles:
+### Combining Rows
+
+Another useful command is `bind_rows`, which lets us combine tibbles:
 
 ```{r bind_rows, include=TRUE}
 weather = bind_rows(nashville_weather, chicago_weather)
@@ -519,23 +583,33 @@ We can operate on this combined tibble:
 
 ```{r process_combined_data_frame}
 weather_summary = weather %>% 
-  mutate(year = year(date), t.range = tmax - tmin) %>%
+  mutate(year = year(date), t_range = tmax - tmin) %>%
   group_by(year, location) %>%   
-  summarize(prcp.max = max(prcp), prcp.tot = sum(prcp), 
-            t.range.max = max(t.range)) %>%
+  summarize(prcp_max = max(prcp), prcp_tot = sum(prcp), t_range.max = max(t_range)) %>%
   ungroup() %>%
   arrange(year, location)
 tail(weather_summary)
 ```
 
-## Re-shaping tibbles: `gather` and `spread`
+## Tidy Data and Pivoting tibbles
 
-Sometimes you want to gather many columns in a data table, data frame, or tibble
-into a single column. For instance, consider this data frame, which was 
+The `tidyr` package in the tidyverse is used to make data `tidy`: re-organizing
+the columns and rows of a `tibble` to make it easier to analyze.
+
+Sometimes you want to re-organize a data frame or tibble to collect many 
+columns into a single column, or we may want to separate one column of data
+into many columns. These operations, which change the shape of the data frame,
+are called "pivots". Here, we will explore two powerful functions in the 
+tidyverse, `pivot_longer` and `pivot_wider`, and they are explained in detail in 
+[the section on "Pivoting"](https://r4ds.had.co.nz/tidy-data.html#pivoting) 
+in [chapter 12](https://r4ds.had.co.nz/tidy-data.html) 
+of _R for Data Science_.
+
+Consider this data frame, which was 
 read in from a spreadsheet of global temperatures produced at NASA:
 
 ```{r giss_temp_example}
-giss_zonal = readRDS('_data/giss_zonal.Rds')
+giss_zonal <- readRDS('_data/giss_zonal.Rds')
 head(giss_zonal)
 ```
 
@@ -557,10 +631,12 @@ ggplot(giss_zonal, aes(x = year)) +
   geom_line(aes(y = x90s_64s, color = "90S-64S")) +
   labs(x = "Year", y = "Temperature anomaly")
 ```
-This is a big mess. It would be hard to clean up the appearance, and would require a lot of 
-retyping if we decided to group the data into different bands of latitude.
 
-We can do this much more easily with the `gather` function:
+This is a big mess. It would be hard to clean up the appearance, and would 
+require a lot of retyping if we decided to group the data into different bands 
+of latitude.
+
+We can do this much more easily with the `pivot_longer` function:
 
 ```{r tidy_zonal_tibble, include=TRUE}
 bands = names(giss_zonal) # column names of the tibble
@@ -568,8 +644,11 @@ bands = bands[-1] # drop the first column ("year")
 labels = c("64N-90N", "44N-64N", "24N-44N", "EQU-24N", 
            "24S-EQU", "44S-24S", "64S-44S", "90S-64S")
 tidy_zonal = giss_zonal %>%
-  gather(key = latitude, value = anomaly, -year)
+  pivot_longer(cols = -year, names_to = "latitude", values_to = "anomaly")
+```
 
+Let's see what the result of this looks like:
+```{r inspect_tidy_zonal, include = TRUE}
 head(tidy_zonal)
 ```
 
@@ -580,15 +659,17 @@ human readers:
 tidy_zonal = tidy_zonal %>%
   mutate(latitude = ordered(latitude, levels = bands, 
                             labels = labels)) %>%
-  # ^^^ the previous line converts the latitude band into an ordered factor
-  # where the order is the order of the original columns. This will prevent
-  # R from sorting them alphabetically when it makes the legend for the plot.
-  # The "labels" parameter then changes the names from the somewhat cryptic 
-  # original column name to something a human can read easily.
   arrange(year, latitude)
 
 head(tidy_zonal)
 ```
+
+In this, the `mutate` command converts the latitude band into an ordered factor
+where the order is the order of the original columns. 
+This gets R to sort them in the order of latitude bands, instead of 
+alphabetically, when it makes the legend for the plot.
+The `labels` parameter then changes the names from the original column name, 
+which was somewhat cryptic, to something a person can make sense of.
 
 Now let's plot it:
 ```{r plot_zonal_tibble, include = TRUE}
@@ -596,11 +677,12 @@ ggplot(tidy_zonal, aes(x = year, y = anomaly, color = latitude)) +
   geom_line() +
   labs(x = "Year", y = "Temperature anomaly")
 ```
+
 The code for making the plot was a lot simpler, and by using an ordered factor,
 we could control the order of the latitude bands in the legend, which now
 appear in a sensible order. It is much easier to look at this graph and quickly
-recognize that the far northern latitudes (64N-90N, and to a lesser extent
-44N-64N) are warming up much faster than the rest of the planet.
+recognize that the far northern latitudes (64N--90N, and to a lesser extent
+44N--64N) are warming up much faster than the rest of the planet.
 
 Back in 1967, one of the first global climate models predicted that 
 global warming due to greenhouse gases would cause the far northern latitudes 
@@ -610,8 +692,11 @@ prediction.
 We also see that the Southern Hemisphere has warmed much less than the Northern.
 Think about why that might be.
 
-We can also do the inverse of `gather` and spread one column of data and one
-"key" column into many columns, whose names are taken from the "key" column.
+The `pivot_wider` function is the inverse of `pivot_longer`. 
+It pivots a tibble by spreading one column of data into many columns, 
+using a second column to indicate the names of those columns.
+For each row, the data in the "value" column is moved to a new column named by
+the "key" column.
 
 Let's go back to the `weather_summary` tibble we made above:
 
@@ -622,9 +707,9 @@ head(weather_summary)
 Let's set it up to make it easy to compare the annual precipitation of 
 Nashville and Chicago:
 
-```{r spread_weather_summary, include=TRUE}
-x = weather_summary %>% select(year, location, prcp.tot) %>%
-  spread(key = location, value = prcp.tot)
+```{r wide_weather_summary, include=TRUE}
+x = weather_summary %>% select(year, location, prcp_tot) %>%
+  pivot_wider(names_from = "location", values_from = "prcp_tot")
 tail(x)
 ```
 
@@ -655,13 +740,16 @@ The idea is that a graph has several distinct parts, which come together:
 There are some more aspects to the gramar of graphics, but we don't need them
 for what we're going to do.
 
+These graphics functions are explained in detail in 
+[Chapter 3](https://r4ds.had.co.nz/data-visualisation.html) of
+_R for Data Science_.
+
 A simple graph has just one layer: 
 
-```{r simple_plot, include=TRUE, warning = FALSE}
+```{r simple_plot, include=TRUE, warning=FALSE}
 ggplot(data = tidy_zonal, # the data
        # the mapping of variables to aesthetics
-       mapping = aes(x = year, y = anomaly, color = latitude, 
-                     shape = latitude) 
+       mapping = aes(x = year, y = anomaly, color = latitude, shape = latitude)
        ) +
   geom_point() + # the geometry
   labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
@@ -669,7 +757,7 @@ ggplot(data = tidy_zonal, # the data
 
 We can also make a plot with the same data, but two layers:
 
-```{r second_plot, include=TRUE, warning = FALSE}
+```{r second_plot, include=TRUE, warning=FALSE}
 ggplot(data = tidy_zonal, # the data
        # the mapping of variables to aesthetics
        mapping = aes(x = year, y = anomaly, color = latitude, shape = latitude)
@@ -682,39 +770,46 @@ ggplot(data = tidy_zonal, # the data
 
 We can also use different mappings for different layers
 
-```{r third_plot, include=TRUE, warning = FALSE}
+```{r third_plot, include=TRUE, warning=FALSE}
 annual_extremes = weather %>% mutate(year = year(date)) %>%
   group_by(location, year) %>% 
   summarize(tmin = min(tmin, na.rm = T),      # the na.rm = T means to ignore 
-            tmax = max(tmax, na.rm = T)) %>%  # missing values. If we don't put
-  ungroup()                                   # that in, then if any year has a
-                                              # missing value for even one day,
-                                              # the tmax or tmin for that year
-                                              # will be recorded as NA (missing)
-ggplot(data = annual_extremes # the data
-       ) +
-  geom_point(aes(x = year, y = tmin, color = location, shape = "min")) +
-  geom_point(aes(x = year, y = tmax, color = location, shape = "max")) +
-  xlim(1990,2000) + # set the range of the x-axis, 
-                    # part of the coordinate specification
+            tmax = max(tmax, na.rm = T)) %>%  # missing values if we don't put 
+  ungroup()                                   # that in, then  if any year has
+                                              # a missing value for even one 
+                                              # day, the tmax or tmin for that 
+                                              # year will be recorded as  
+                                              # NA (missing)
+
+ggplot(annual_extremes,                       # The data
+       aes(x = year, color = location) ) +    # Shared aesthetics go here
+                                              #
+  geom_point(aes(y = tmin, shape = "min")) +  # Aesthetics that are different 
+  geom_point(aes(y = tmax, shape = "max")) +  # for different geometrries go 
+                                              # with the geometry.
+                                              # 
+  xlim(1990,2000) +                           # Set the range of the x-axis, 
+                                              # part of the coordinate 
+                                              # specification
+                                              # 
   labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
 ```
 
 Note that `ggplot` issued several harmless warnings to tell us that 
-setting the limits of the  _x_-axis the way we did. We can tell RMarkdown not
-to include those warnings in the document by adding "warning=FALSE"
-to the options for the chunk
+setting the limits of the  _x_-axis the way we did cause some points not to be
+plotted.
+We can tell RMarkdown not to include those warnings in the document by adding 
+"warning=FALSE" to the options for the chunk
 
 If we want to specify aesthetics as having fixed values, we can specify them
 outside of the mapping. Here I specify the size and color of lines:
 
 ```{r fourth_plot, include=TRUE, warning=FALSE}
-ggplot(data = annual_extremes # the data
-       ) +
-  geom_line(aes(x = year, y = tmin, group = location), color = "dark blue", 
-            size = 1) +
-  geom_line(aes(x = year, y = tmax, group = location), color = "dark red", 
-            size = 0.3) +
+ggplot(data = annual_extremes) +
+  geom_line(aes(x = year, y = tmin, group = location), 
+            color = "dark blue", size = 1) +
+  geom_line(aes(x = year, y = tmax, group = location), 
+            color = "dark red", size = 0.3) +
   geom_point(aes(x = year, y = tmin, color = location, shape = "min"), 
              size = 2) +
   geom_point(aes(x = year, y = tmax, color = location, shape = "max"), 
@@ -727,12 +822,11 @@ ggplot(data = annual_extremes # the data
 We can also take finer control of the axis formatting:
 
 ```{r fifth_plot, include=TRUE, warning=FALSE}
-ggplot(data = annual_extremes # the data
-       ) +
-  geom_line(aes(x = year, y = tmin, group = location), color = "dark blue", 
-            size = 1) +
-  geom_line(aes(x = year, y = tmax, group = location), color = "dark red", 
-            size = 0.3) +
+ggplot(data = annual_extremes) +
+  geom_line(aes(x = year, y = tmin, group = location), 
+            color = "dark blue", size = 1) +
+  geom_line(aes(x = year, y = tmax, group = location), 
+            color = "dark red", size = 0.3) +
   geom_point(aes(x = year, y = tmin, color = location, shape = "min"), 
              size = 2) +
   geom_point(aes(x = year, y = tmax, color = location, shape = "max"), 
@@ -743,24 +837,26 @@ ggplot(data = annual_extremes # the data
   labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
 ```
 
-And, of course, we could use `gather` to simplify this graph:
+And, of course, we could use `pivot_longer` to simplify this graph:
 
 ```{r sixth_plot, include=TRUE, warning=FALSE}
-annual_extremes_gathered = annual_extremes %>%
-  gather(key = Temperature, value = value, -year, -location)
+annual_extremes_tidy = annual_extremes %>%
+  pivot_longer(cols = -c(year, location), names_to = "Temperature", 
+               values_to = "value")
 
-ggplot(data = annual_extremes_gathered # the data
-       ) +
-  geom_line( aes(x = year, y = value, color = location, size = Temperature)) +
-  geom_point(aes(x = year, y = value, color = location, shape = Temperature), 
-             size = 2) +
-  scale_size_manual(values = c(tmax = 0.5, tmin = 0.1)) + # set coordinates 
-                                                          # for "size"
+ggplot(data = annual_extremes_tidy,                   # the data
+       aes(x = year, y = value, color = location)) +  # the aesthetics
+  geom_line(aes(size = Temperature)) +                # for lines, the size
+                                                      # varies with Temperature
+  geom_point(aes(shape = Temperature), size = 2) +    # for points, the shape
+                                                      # varies with Temperature
+  scale_size_manual(values = c(tmax = 0.5, 
+                               tmin = 0.1)) + # set coordinates for "size"
   scale_x_continuous(limits=c(1990,2000), 
                      breaks = c(1990, 1992, 1994, 1996, 1998, 2000)) + 
   # ^^^ Set coordinates for the x-axis.
-  # Below: one of many options for setting the color palette: the Brewer
-  # palettes are very good for people with color-blindness.
   scale_color_brewer(palette = "Set1", name = "City") + 
+  # We can override the default color palette. 
+  # The Brewer palettes are very good for people with color-blindness.
   labs(x = "Year", y = "Temperature Anomaly") # labels for the coordinates
 ```

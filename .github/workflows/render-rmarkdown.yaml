@@ -1,0 +1,26 @@
+on:
+  push:
+    branches:
+      - main
+      - master
+
+name: Render Rmarkdown files
+
+jobs:
+  render:
+    name: Render Rmarkdown files
+    runs-on: macOS-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: r-lib/actions/setup-r@v1
+      - uses: r-lib/actions/setup-pandoc@v1
+      - name: Install rmarkdown, remotes, and tidyverse
+        run: |
+          install.packages("remotes")
+          remotes::install_cran(c("rmarkdown", "tidyverse"))
+        shell: Rscript {0}
+      - name: Render Rmarkdown files
+        run:
+          Rscript -e 'rmarkdown::render("lab-01-report.Rmd", output_format = "github_document", output_dir = ".test-output")'

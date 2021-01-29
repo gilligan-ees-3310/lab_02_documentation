@@ -1,11 +1,18 @@
 library(pacman)
-p_load(tidyverse, scales, gtable, grid, stringr, xml2)
+p_load(tidyverse, scales, xml2)
 
 ssource <- function(filename, chdir = F) {
   if(!file.exists(filename)) {
-    if(exists("script_dir")) script_dir = script_dir
-    else if (exists("script.dir")) script_dir = script.dir
-    else if (dir.exists("scripts")) script_dir = "scripts"
+    if(exists("script_dir", envir = globalenv()))
+      script_dir = get("script_dir", envir = globalenv())
+    else if (exists("script.dir", envir = globalenv()))
+      script_dir = get("script.dir", envir = globalenv())
+    else if (dir.exists("_scripts"))
+      script_dir = "_scripts"
+    else if (dir.exists(rprojroot::find_rstudio_root_file("_scripts")))
+      script_dir = ("_scripts")
+    else
+      script_dir = "."
     if(dir.exists(script_dir)) filename = file.path(script_dir, filename)
   }
   source(filename, chdir = chdir,
@@ -17,7 +24,7 @@ if (! exists("planck")) ssource("planck.R", chdir = T)
 
 
 
-model_params = data_frame(
+model_params = tibble(
   key = c("co2_ppm",
           "ch4_ppm",
           "trop_o3_ppb",
@@ -57,27 +64,30 @@ model_params = data_frame(
             NA, "sensor_orientation")
 )
 
-atmos_spec <- data_frame(
+atmos_spec <- tibble(
   key = c("tropical",
           "midlatitude summer", "midlatitude winter",
           "subarctic summer", "subarctic winter",
-          "standard"
+          "standard", "standard atmosphere",
+          "us standard atmosphere", "u s standard atmosphere",
+          "1976 standard atmosphere",
+          "1976 us standard atmosphere", "1976 u s standard atmosphere"
   ),
-  value = c(1, 2, 3, 4, 5, 6),
+  value = c(1, 2, 3, 4, 5, rep(6, 7)),
   descr = c("Tropical",
             "Midlatitude Summer", "Midlatitude Winter",
             "Subarctic Summer", "Subarctic Winter",
-            "1976 U.S. Standard Atmosphere"
+            rep("1976 U.S. Standard Atmosphere", 7)
   )
 )
 
-h2o_fixed <- data_frame(
+h2o_fixed <- tibble(
   key = c("vapor pressure", "relative humidity"),
   value = c(0, 1),
   descr = c("constant vapor pressure", "constant relative humidity")
 )
 
-cloud_spec <- data_frame(
+cloud_spec <- tibble(
   key = c("none",
           "cumulus",
           "altostratus",
@@ -109,13 +119,13 @@ cloud_spec <- data_frame(
             "NOAA cirrus model")
 )
 
-sensor_orientation <- data_frame(
+sensor_orientation <- tibble(
   key = c("down", "up"),
   value = c(180, 0),
   descr = c("looking down", "looking up")
 )
 
-run_modtran <- function(filename,
+run_modtran <- function(filename = NULL,
                         co2_ppm = 400,
                         ch4_ppm = 1.7,
                         trop_o3_ppb = 28,
@@ -141,6 +151,10 @@ run_modtran <- function(filename,
                 "atmosphere", "clouds",
                 "altitude_km", "looking")) %>%
     map(~as.character(.x[1])) %>%
+    modify_at("atmosphere", ~str_to_lower(.x) %>%
+                str_replace_all(c("[^a-z0-9]+" = " ", "  +" = " ")) %>%
+                str_trim()
+    ) %>%
     simplify()
   for(k in c('h2o_fixed', 'atmosphere', 'clouds', 'looking')) {
     # message("Looking up ", k)
@@ -150,7 +164,7 @@ run_modtran <- function(filename,
     # message("Lookup class = ", class(lookup), ", type = ", typeof(lookup), ", dim = ", dim(lookup))
     values[k] = lookup %>% filter(key == values[k]) %>% select(value) %>% simplify()
   }
-  args <- data_frame(key = names(values), value = values)
+  args <- tibble(key = names(values), value = values)
   params = model_params %>% inner_join(args, by = "key")
   url_base = 'http://climatemodels.uchicago.edu/cgi-bin/modtran/modtran.cgi?'
   args = str_c(params$cgi, params$value, sep = "=", collapse = "&")
@@ -160,13 +174,25 @@ run_modtran <- function(filename,
   output = read_html(url)
   body <- as_list(output) %>% unlist() %>% simplify()
   # lines <- body %>% str_split("\n") %>% unlist() %>% simplify()
-  write(body, filename)
-  invisible(body)
+  if (! is.null(filename)) {
+    write(body, filename)
+  }
+  Sys.sleep(5)
+
+
+  output <- str_c(body, collapse = "\n") %>% read_modtran(text = .)
+  invisible(output)
 }
 
 
-read_modtran_profile <- function(filename, text = NULL) {
-  if (missing(filename) && ! is.null(text)) {
+read_modtran_profile <- function(filename = NULL, text = NULL) {
+  if (! is.null(filename) && ! is.na(filename)) {
+    if (isTRUE(any(str_detect(filename, "\n"))) || length(filename) > 1) {
+      text = filename
+      filename = NULL
+    }
+  }
+  if (is.null(filename) && ! is.null(text)) {
     lines <- text %>% str_split("\n") %>% unlist()
   } else {
     f <- file(filename,"r")
@@ -174,30 +200,49 @@ read_modtran_profile <- function(filename, text = NULL) {
     close(f)
   }
   im <- str_detect(lines, "^ +ATMOSPHERIC PROFILES") %>% which()
-  header <- im[[1]] + 2
-  start <- im[[1]] + 5
-  end <- im[[2]] - 2
+  header <- im[[3]] + 2
+  start <- header + 2
+  end <- im[[4]] - 2
   col_names <- lines[[header]] %>% str_trim() %>% str_split(" +") %>% unlist() %>%
     str_replace_all("([^a-zA-Z0-9_]+)", ".") %>%
     str_replace_all(c('^\\.' = '', '\\.$' = ''))
   dups <- duplicated(col_names) %>% which()
   col_names[dups] <- col_names[dups] %>% str_c(seq_along(dups), sep = ".")
   profile <- lines[start:end] %>% str_trim() %>% str_c(collapse = "\n") %>%
-    read_table2(col_names=col_names[1:10])
-  profile <- profile[,2:4]
-  names(profile) <- col_names[2:4]
+    read_table2(col_names=col_names)
+  profile <- profile %>% select(Z, P, T, H2O, O3, CO2, CH4) %>%
+    # convert from MBAR to ppmv
+    mutate(H2O = H2O * 1E6 / P)
   profile
 }
 
-read_modtran <- function(filename, text = NULL, scale_factor = 3.14E+4) {
-  if (missing(filename) && ! is.null(text)) {
+extract_tropopause <- function(profile) {
+  profile %>% filter(T <= lead(T)) %>% top_n(-1, Z)
+}
+
+read_modtran <- function(filename = NULL, text = NULL, scale_factor = 3.14E+4) {
+  if (! is.null(filename) && ! is.na(filename)) {
+    if (isTRUE(any(str_detect(filename, "\n"))) || length(filename) > 1) {
+      text = filename
+      filename = NULL
+    }
+  }
+  if (is.null(filename) && ! is.null(text)) {
     lines <- text %>% str_split("\n") %>% unlist()
   } else {
     f <- file(filename,"r")
     lines <- readLines(f,warn=F)
     close(f)
   }
+  atmos_index <- str_detect(lines, "ATMOSPHERIC MODEL") %>% which()
+  atmos_spec <- str_match(lines[atmos_index + 1],
+                          "^ +TEMPERATURE += +[0-9]+ +(?<atmos>[A-Za-z0-9].+)$") %>%
+    { .[1,2] } %>% str_trim()
+
   profile <- read_modtran_profile(text = lines)
+  tropopause <- extract_tropopause(profile)
+  t_ground = profile$T[1]
+
   im <- str_detect(lines, "^0INTEGRATED RADIANCE") %>% which()
   target <- lines[im[1]]
   x <- str_extract(target, "[0-9]\\.[0-9]*E[+-][0-9]+")
@@ -207,7 +252,7 @@ read_modtran <- function(filename, text = NULL, scale_factor = 3.14E+4) {
     which()
   target <- lines[im[1]]
   x <- target %>% str_trim() %>% str_split(" +") %>% unlist()
-  x <- x[7:12] %>% map_dbl(~as.numeric(.x)) %>% set_names(x[1:6])
+  x <- x[8:14] %>% map_dbl(~as.numeric(.x)) %>% set_names(x[1:7])
   co2 <- x['co2mx']
   ch4 <- x['ch4rat'] * 1.7
   im <- str_detect(lines, fixed("0 SLANT PATH TO SPACE")) %>% which()
@@ -238,10 +283,16 @@ read_modtran <- function(filename, text = NULL, scale_factor = 3.14E+4) {
                  co2=co2, ch4=ch4,
                  i_out = integrated_radiance,
                  alt = altitude, sensor_direction = direction,
-                 profile = profile))
+                 profile = profile,
+                 h_tropo = tropopause$Z,
+                 t_tropo = tropopause$T,
+                 t_ground = t_ground,
+                 atmosphere = atmos_spec))
 }
 
-plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
+plot_modtran <- function(filename = NULL, text = NULL,
+                         modtran_data = NULL,
+                         descr = NULL, i_out_ref = NA,
                          last_i_out = NA, delta_t = NA,
                          tmin=220, tmax = 300,
                          nc = 5, max_color = 0.8,
@@ -250,8 +301,16 @@ plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
                          annotate_y_1 = 0.49, annotate_y_2 = 0.44,
                          annotate_size = 5, text_size = 10,
                          legend_text_size = 10, legend_size = 0.2,
-                         line_scale = 1, direction = "out") {
-  x  <- read_modtran(filename)
+                         line_scale = 1, direction = "out",
+                         lambda = NULL) {
+  if (! is.null(modtran_data)) {
+    x <- modtran_data
+  } else if (! is.null(filename) && is.list(filename) &&
+             "spectrum" %in% names(filename)) {
+    x <- filename
+  } else {
+    x  <- read_modtran(filename, text)
+  }
   spectrum <- x$spectrum
   alt <- x$alt
   co2 <- x$co2
@@ -279,14 +338,16 @@ plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
 
   thermal <- data.frame(k = spectrum$k, t = tmin)
   thermal <- bind_rows(thermal, map(seq(tmin + dt, tmax, dt),
-                                    ~data_frame(k = spectrum$k, t = .x)))
+                                    ~tibble(k = spectrum$k, t = .x)))
   thermal <- thermal %>%
     mutate(tk = planck(k, as.numeric(as.character(t)),fudge_factor=1),
            t = paste(t, "K") %>%
              ordered(., levels = c("MODTRAN", sort(unique(.), decreasing = TRUE)))
     ) %>% na.omit() %>% filter(between(k, k_limits[1], k_limits[2]))
 
-  lambda = c(1, 2, 2.5, 3, 3.5, 4, 5:10, 12, 14, 17, 20, 25, 30, 35, 40, 50, 100)
+  if (is.null(lambda)) {
+    lambda = c(1, 2, 2.5, 3, 3.5, 4, 5:10, 12, 14, 17, 20, 25, 30, 35, 40, 50, 100)
+  }
 
   spectrum <- spectrum %>% select(k, tk) %>% na.omit() %>%
     filter(between(k, k_limits[1], k_limits[2]))
@@ -311,14 +372,14 @@ plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
   if (! is.na(annotate_size)) {
     p1 <- p1 + annotate("text", x=annotate_x_1, y=annotate_y_1,
                         label=caption, parse="TRUE", hjust=0, vjust=1,
-                        size=annotate_size, color="dark blue")
+                        size=annotate_size, color="darkblue")
 
     if (! is.na(delta_i)) {
       caption <- paste("Delta * I[", direction, "] == ",
                        formatC(delta_i, digits=2, format="f"))
       p1 <- p1 + annotate("text", x=annotate_x_2, y=annotate_y_1,
                           label=caption, parse="TRUE", hjust=1, vjust=1,
-                          size=annotate_size, color="dark blue")
+                          size=annotate_size, color="darkblue")
     }
 
     if (! is.na(last_i_out)) {
@@ -326,7 +387,7 @@ plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
                                             digits=2, format="f"))
       p1 <- p1 + annotate("text", x=annotate_x_2, y=annotate_y_2,
                           label=caption, parse="TRUE", hjust=1, vjust=1,
-                          size=annotate_size, color="dark blue")
+                          size=annotate_size, color="darkblue")
     } else if (! is.na(delta_t)) {
       caption <- paste("Delta * T[ground] == ",formatC(delta_t,
                                                        digits=delta_t_digits,
@@ -334,7 +395,7 @@ plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
                        " * K")
       p1 <- p1 + annotate("text", x=annotate_x_2, y=annotate_y_2,
                           label=caption, parse="TRUE", hjust=1, vjust=1,
-                          size=annotate_size, color="dark blue")
+                          size=annotate_size, color="darkblue")
 
     }
   }
@@ -344,7 +405,7 @@ plot_modtran <- function(filename, descr = NULL, i_out_ref = NA,
           panel.grid.minor=element_line(size=0.1,color="gray95"),
           legend.key.size = unit(legend_size,"npc"),
           legend.text = element_text(size=legend_text_size),
-          legend.position = c(1,1), legend.justification = c(1,1),
+          legend.position = c(0.99,0.99), legend.justification = c(1,1),
           legend.key.height = unit(1, "lines"), legend.key.width = unit(2, "lines"),
           legend.background = element_rect(color = "black", fill = "white"))
 
